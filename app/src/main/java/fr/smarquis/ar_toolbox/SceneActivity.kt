@@ -67,8 +67,8 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
     private val settings by lazy { Settings.instance(this) }
     private var drawing: Drawing? = null
 
-    private lateinit var webSocketManager: WebSocketManager
-    private val WEBSOCKET_SERVER_URL = "ws://10.250.81.101:8080" // Default for emulator
+    lateinit var webSocketManager: WebSocketManager
+    private val WEBSOCKET_SERVER_URL = "ws://192.168.1.4:8080" // Default for emulator
 
 
     private val setOfMaterialViews by lazy {
@@ -418,7 +418,7 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
     }
 
     private fun createNodeAndAddToScene(anchor: () -> Anchor, focus: Boolean = true) {
-        when (model.selection.value) {
+        val node = when (model.selection.value) {
             Sphere::class -> Sphere(this, materialProperties(), coordinator, settings)
             Cylinder::class -> Cylinder(this, materialProperties(), coordinator, settings)
             Cube::class -> Cube(this, materialProperties(), coordinator, settings)
@@ -429,7 +429,13 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
             Link::class -> Link(this, model.externalModelUri.value.orEmpty().toUri(), coordinator, settings)
             CloudAnchor::class -> CloudAnchor(this, arSceneView.session ?: return, coordinator, settings)
             else -> return
-        }.attach(anchor(), arSceneView.scene, focus)
+        }
+        
+        // Attach the node to the scene
+        node.attach(anchor(), arSceneView.scene, focus)
+        
+        // Send anchor and transformation data to the server
+        webSocketManager.sendNodeAnchorData(node)
     }
 
     private fun onArUpdate() {
@@ -516,6 +522,8 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
         arSceneView.arFrame?.getUpdatedTrackables(AugmentedImage::class.java)?.forEach {
             Augmented.update(this, it, coordinator, settings)?.apply {
                 attach(it.createAnchor(it.centerPose), arSceneView.scene)
+                // Send anchor data to server for Augmented image nodes
+                webSocketManager.sendNodeAnchorData(this)
             }
         }
     }

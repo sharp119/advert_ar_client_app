@@ -4,7 +4,7 @@
     <!-- It explicitly allows cleartext traffic for your specific local IP addresses. -->
     <domain-config cleartextTrafficPermitted="true">
         <!-- Replace 192.168.1.8 with your actual computer's local IP address -->
-        <domain includeSubdomains="true">10.250.81.101</domain>
+        <domain includeSubdomains="true">192.168.1.4</domain>
         <!-- Include the emulator alias if you also test on emulator -->
         <domain includeSubdomains="true">10.0.2.2</domain>
     </domain-config>

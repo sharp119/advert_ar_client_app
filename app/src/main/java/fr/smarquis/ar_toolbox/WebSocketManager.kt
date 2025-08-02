@@ -109,6 +109,68 @@ class WebSocketManager(private val context: Context, private val serverUrl: Stri
     }
 
     /**
+     * Sends anchor and transformation data for a newly created AR node to the WebSocket server.
+     * This includes the anchor position and the node's world transformation needed to place a replacement object.
+     *
+     * @param node The AR node that was just created
+     */
+    fun sendNodeAnchorData(node: Nodes) {
+        if (webSocket == null) {
+            println("WebSocket is not initialized or closed. Cannot send node anchor data.")
+            return
+        }
+
+        val anchor = node.anchor()
+        if (anchor == null) {
+            println("Node has no anchor, cannot send anchor data.")
+            return
+        }
+
+        val translation = anchor.pose.translation
+        val rotation = anchor.pose.rotationQuaternion
+
+        val dataToSend = JSONObject().apply {
+            put("type", "nodeAnchor") // Indicate this is anchor data for a new node
+            put("timestamp", System.currentTimeMillis())
+            
+            // Essential node identification
+            put("nodeId", node.name) // Unique identifier: e.g., "Sphere #1", "Cube #2"
+            put("nodeType", node::class.simpleName) // Node type: "Sphere", "Cube", "Drawing", etc.
+            
+            // Core anchor position and rotation - the base position where the object is anchored
+            put("anchorPositionX", translation[0])
+            put("anchorPositionY", translation[1])
+            put("anchorPositionZ", translation[2])
+            put("anchorRotationX", rotation[0])
+            put("anchorRotationY", rotation[1])
+            put("anchorRotationZ", rotation[2])
+            put("anchorRotationW", rotation[3])
+            
+            // Node world transformation - the actual position, rotation, and scale of the object
+            put("nodePositionX", node.worldPosition.x)
+            put("nodePositionY", node.worldPosition.y)
+            put("nodePositionZ", node.worldPosition.z)
+            put("nodeRotationX", node.worldRotation.x)
+            put("nodeRotationY", node.worldRotation.y)
+            put("nodeRotationZ", node.worldRotation.z)
+            put("nodeRotationW", node.worldRotation.w)
+            put("nodeScaleX", node.worldScale.x)
+            put("nodeScaleY", node.worldScale.y)
+            put("nodeScaleZ", node.worldScale.z)
+            
+            // Include cloud anchor ID if this is a cloud anchor (for persistent placement across sessions)
+            if (node is CloudAnchor) {
+                node.id()?.let { put("cloudAnchorId", it) }
+                put("cloudAnchorState", node.state()?.name ?: "UNKNOWN")
+            }
+        }
+
+        webSocket?.send(dataToSend.toString())
+        println("Sent anchor data: ${node.name} (${node::class.simpleName}) - Anchor: [${translation[0]}, ${translation[1]}, ${translation[2]}], Node: [${node.worldPosition.x}, ${node.worldPosition.y}, ${node.worldPosition.z}]")
+    }
+
+
+    /**
      * Sends data about a newly created or updated AR anchor to the WebSocket server.
      *
      * @param anchorId A unique identifier for the anchor.

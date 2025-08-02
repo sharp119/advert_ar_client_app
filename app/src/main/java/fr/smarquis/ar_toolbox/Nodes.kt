@@ -449,6 +449,11 @@ class Drawing(
                 makeOpaqueWithColor(context.applicationContext, properties.color.toArColor()).thenAccept { material = it }
                 attach(anchor, scene)
                 extend(x, y)
+                
+                // Send anchor data to server for Drawing nodes
+                if (context is SceneActivity) {
+                    context.webSocketManager.sendNodeAnchorData(this)
+                }
             }
         }
     }
@@ -593,7 +598,14 @@ class CloudAnchor(
             if (ar.arFrame?.camera?.trackingState != TRACKING) return null
             val session = ar.session ?: return null
             val anchor = session.resolveCloudAnchor(id)
-            return CloudAnchor(context.applicationContext, session, coordinator, settings).also { it.attach(anchor, ar.scene) }
+            return CloudAnchor(context.applicationContext, session, coordinator, settings).also { 
+                it.attach(anchor, ar.scene) 
+                
+                // Send anchor data to server for resolved CloudAnchor nodes
+                if (context is SceneActivity) {
+                    context.webSocketManager.sendNodeAnchorData(it)
+                }
+            }
         }
     }
 
