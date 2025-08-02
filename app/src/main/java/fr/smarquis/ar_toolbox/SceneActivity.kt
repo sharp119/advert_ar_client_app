@@ -432,15 +432,30 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
             return
         }
 
-        frame.hitTest(motionEvent).firstOrNull {
-            val trackable = it.trackable
-            when {
-                trackable is Plane && trackable.isPoseInPolygon(it.hitPose) -> true
-                trackable is DepthPoint -> true
-                trackable is Point -> true
-                else -> false
-            }
-        }?.let { createNodeAndAddToScene(anchor = { it.createAnchor() }) } ?: coordinator.selectNode(null)
+        // Check if we're placing a Link node (URL-based model)
+        val isLinkNode = model.selection.value == Link::class
+        
+        if (isLinkNode) {
+            // For Link nodes, use mid-air placement like doodles
+            val session = arSceneView.session ?: return
+            val ray = arSceneView.scene.camera.screenPointToRay(motionEvent.x, motionEvent.y)
+            val point = ray.getPoint(0.5f) // 0.5 meters in front of camera
+            val midAirPose = com.google.ar.core.Pose.makeTranslation(point.x, point.y, point.z)
+            
+            createNodeAndAddToScene(anchor = { session.createAnchor(midAirPose) })
+            println("🎯 Link node placed in mid-air at 0.5m from camera")
+        } else {
+            // For other nodes, use normal plane-based placement
+            frame.hitTest(motionEvent).firstOrNull {
+                val trackable = it.trackable
+                when {
+                    trackable is Plane && trackable.isPoseInPolygon(it.hitPose) -> true
+                    trackable is DepthPoint -> true
+                    trackable is Point -> true
+                    else -> false
+                }
+            }?.let { createNodeAndAddToScene(anchor = { it.createAnchor() }) } ?: coordinator.selectNode(null)
+        }
     }
 
     private fun createNodeAndAddToScene(anchor: () -> Anchor, focus: Boolean = true) {
