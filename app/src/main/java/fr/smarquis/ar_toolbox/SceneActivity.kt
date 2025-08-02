@@ -511,6 +511,96 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
     }
     
     /**
+     * Shows a dialog for Link nodes and schedules auto-replacement after 10 seconds
+     */
+    fun showLinkNodeDialog(linkNode: Link) {
+        runOnUiThread {
+            // Show dialog with model info
+            val dialog = AlertDialog.Builder(ContextThemeWrapper(this, R.style.AlertDialog))
+                .setTitle("🔗 Link Node Created")
+                .setMessage("URL: ${linkNode.uri}\n\nThis node will be replaced with campsite model in 10 seconds...")
+                .setPositiveButton("OK") { dialog, _ -> 
+                    dialog.dismiss()
+                }
+                .setCancelable(true)
+                .create()
+            
+            dialog.show()
+            
+            // Auto-dismiss dialog after 10 seconds and replace node
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                dialog.dismiss()
+                replaceWithCampsite(linkNode)
+            }, 10000) // 10 seconds
+            
+            println("📋 Dialog shown for Link node: ${linkNode.name} with URL: ${linkNode.uri}")
+        }
+    }
+    
+    /**
+     * Replaces a Link node with the campsite model at the same location
+     */
+    private fun replaceWithCampsite(originalNode: Link) {
+        println("🏕️ Replacing Link node with campsite model...")
+        
+        // Get the original node's anchor and position
+        val originalAnchor = originalNode.anchor()
+        if (originalAnchor == null) {
+            println("❌ Cannot replace node - no anchor found")
+            return
+        }
+        
+        // Store the original position data
+        val originalPose = originalAnchor.pose
+        val anchorData = AnchorData(
+            position = com.google.ar.sceneform.math.Vector3(
+                originalPose.translation[0], 
+                originalPose.translation[1], 
+                originalPose.translation[2]
+            ),
+            rotation = com.google.ar.sceneform.math.Quaternion(
+                originalPose.rotationQuaternion[0], 
+                originalPose.rotationQuaternion[1], 
+                originalPose.rotationQuaternion[2], 
+                originalPose.rotationQuaternion[3]
+            )
+        )
+        
+        // Delete the original node
+        originalNode.setParent(null)
+        println("🗑️ Deleted original Link node: ${originalNode.name}")
+        
+        // Create new anchor at the same position
+        val session = arSceneView.session ?: return
+        val newPose = com.google.ar.core.Pose(
+            floatArrayOf(anchorData.position.x, anchorData.position.y, anchorData.position.z),
+            floatArrayOf(anchorData.rotation.x, anchorData.rotation.y, anchorData.rotation.z, anchorData.rotation.w)
+        )
+        val newAnchor = session.createAnchor(newPose)
+        
+        // Create new Link node with campsite URL
+        val campsiteUri = "http://192.168.1.4:3000/models/camp_site.glb".toUri()
+        val campsiteNode = Link(this, campsiteUri, coordinator, settings)
+        
+        // Attach to scene at exact same location
+        campsiteNode.attach(newAnchor, arSceneView.scene, false)
+        
+        println("✅ Successfully replaced with campsite model at same location")
+        
+        // Send data to server for new campsite node
+        webSocketManager.sendNodeAnchorData(campsiteNode)
+        
+        // Show confirmation dialog
+        runOnUiThread {
+            AlertDialog.Builder(ContextThemeWrapper(this, R.style.AlertDialog))
+                .setTitle("🏕️ Replaced with Campsite")
+                .setMessage("The original model has been replaced with the campsite model at the same location.")
+                .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+                .show()
+        }
+    }
+    
+    /**
      * Recreates a node from stored parameters at the exact same location
      */
     private fun recreateNodeFromParams(params: NodeCreationParams) {
@@ -524,8 +614,11 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
         )
         val recreatedAnchor = session.createAnchor(pose)
         
-        // Create node with exact same parameters
-        val recreatedNode = when (params.nodeType) {
+        // Determine final node type (with random shape selection for basic shapes)
+        val finalNodeType = getRandomizedNodeType(params.nodeType)
+        
+        // Create node with potentially randomized shape/model but same other parameters
+        val recreatedNode = when (finalNodeType) {
             Sphere::class -> Sphere(this, params.materialProperties!!, coordinator, settings)
             Cylinder::class -> Cylinder(this, params.materialProperties!!, coordinator, settings)
             Cube::class -> Cube(this, params.materialProperties!!, coordinator, settings)
@@ -533,7 +626,12 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
             Andy::class -> Andy(this, coordinator, settings)
             Video::class -> Video(this, coordinator, settings)
             Measure::class -> Measure(this, params.materialProperties!!, coordinator, settings)
-            Link::class -> Link(this, params.externalUri!!, coordinator, settings)
+            Link::class -> {
+                // For Link nodes, replace with campsite model from localhost
+                val campsiteUri = "http://192.168.1.4:3000/models/camp_fire.glb".toUri()
+                println("🏕️ Recreating Link with campsite model: $campsiteUri")
+                Link(this, campsiteUri, coordinator, settings)
+            }
             CloudAnchor::class -> CloudAnchor(this, session, coordinator, settings)
             Drawing::class -> {
                 // For Drawing, create a simple Drawing without extending (no line drawing)
@@ -545,10 +643,51 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
         // Attach to scene at exact stored location
         recreatedNode.attach(recreatedAnchor, arSceneView.scene, false) // no focus for recreated nodes
         
-        println("✅ Successfully recreated: ${recreatedNode.name} at stored location")
+        val changeInfo = if (finalNodeType != params.nodeType) {
+            " (changed from ${params.nodeType.simpleName} to ${finalNodeType.simpleName})"
+        } else if (params.nodeType == Link::class) {
+            " (replaced with campsite model)"
+        } else {
+            ""
+        }
+        
+        println("✅ Successfully recreated: ${recreatedNode.name} at stored location$changeInfo")
         
         // Send data to server for recreated node
         webSocketManager.sendNodeAnchorData(recreatedNode)
+    }
+    
+    /**
+     * Randomly selects a shape for basic geometric objects (Sphere, Cube, Cylinder)
+     * For Link nodes, replaces with campsite model for testing
+     * Other node types are returned unchanged
+     */
+    private fun getRandomizedNodeType(originalType: kotlin.reflect.KClass<out Nodes>): kotlin.reflect.KClass<out Nodes> {
+        return when (originalType) {
+            Sphere::class, Cube::class, Cylinder::class -> {
+                // Define the basic shapes
+                val basicShapes = listOf(Sphere::class, Cube::class, Cylinder::class)
+                
+                // Remove the original type to ensure we always get a different shape
+                val otherShapes = basicShapes.filter { it != originalType }
+                
+                // Randomly select from the other shapes
+                val randomShape = otherShapes.random()
+                
+                println("🎲 Shape randomization: ${originalType.simpleName} → ${randomShape.simpleName}")
+                randomShape
+            }
+            Link::class -> {
+                // For Link nodes, we'll replace with campsite model
+                println("🔗 Link randomization: Will replace with campsite model")
+                Link::class
+            }
+            else -> {
+                // Keep other node types unchanged (Layout, Andy, Video, etc.)
+                println("🔄 Non-randomizable type: ${originalType.simpleName} - keeping unchanged")
+                originalType
+            }
+        }
     }
     
     /**

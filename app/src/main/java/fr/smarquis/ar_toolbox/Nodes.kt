@@ -15,6 +15,7 @@ import android.view.MotionEvent
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.core.content.getSystemService
+import androidx.core.net.toUri
 import androidx.core.text.bold
 import androidx.core.text.buildSpannedString
 import androidx.core.text.inSpans
@@ -124,6 +125,78 @@ sealed class Nodes(
                 isShadowReceiver = settings.shadows.get()
             },
         )
+        // Apply bounded space scaling after renderable is set
+        renderable?.let { applyBoundedSpaceScaling(it) }
+    }
+    
+    /**
+     * Creates a bounded 3D space around the anchor and scales the model to fit within it
+     */
+    private fun applyBoundedSpaceScaling(renderable: Renderable) {
+        // Define the bounded space dimensions (in meters)
+        val boundedSpaceSize = getBoundedSpaceSize()
+        
+        // Calculate the model's bounding box using the actual geometry
+        renderable.collisionShape?.let { collisionShape ->
+            when (collisionShape) {
+                is com.google.ar.sceneform.collision.Box -> {
+                    val size = collisionShape.size
+                    val maxModelDimension = maxOf(size.x, size.y, size.z)
+                    applyScaling(maxModelDimension, boundedSpaceSize)
+                }
+                is com.google.ar.sceneform.collision.Sphere -> {
+                    val maxModelDimension = collisionShape.radius * 2 // Diameter
+                    applyScaling(maxModelDimension, boundedSpaceSize)
+                }
+                else -> {
+                    // For other collision shapes or unknown types, use a conservative approach
+                    val conservativeScale = boundedSpaceSize / BoundedSpaceConstants.ASSUMED_LARGE_MODEL_SIZE
+                    val clampedScale = conservativeScale.coerceIn(
+                        BoundedSpaceConstants.MIN_SCALE_FACTOR,
+                        BoundedSpaceConstants.MAX_SCALE_FACTOR
+                    )
+                    localScale = Vector3(clampedScale, clampedScale, clampedScale)
+                    println("🎯 Bounded Space Applied: Unknown collision shape, using conservative scale: ${clampedScale}")
+                }
+            }
+        } ?: run {
+            // Fallback: No collision shape available, apply a reasonable default scale
+            val defaultScale = boundedSpaceSize / BoundedSpaceConstants.ASSUMED_DEFAULT_MODEL_SIZE
+            val clampedScale = defaultScale.coerceIn(
+                BoundedSpaceConstants.MIN_SCALE_FACTOR,
+                BoundedSpaceConstants.MAX_SCALE_FACTOR
+            )
+            localScale = Vector3(clampedScale, clampedScale, clampedScale)
+            println("🎯 Bounded Space Applied: No collision shape, using default scale: ${clampedScale}")
+        }
+    }
+    
+    private fun applyScaling(maxModelDimension: Float, boundedSpaceSize: Float) {
+        val rawScaleFactor = if (maxModelDimension > boundedSpaceSize) {
+            boundedSpaceSize / maxModelDimension
+        } else if (BoundedSpaceConstants.ALLOW_SCALE_UP) {
+            boundedSpaceSize / maxModelDimension
+        } else {
+            1.0f // Don't scale up if model is already smaller
+        }
+        
+        // Clamp the scale factor within allowed limits
+        val scaleFactor = rawScaleFactor.coerceIn(
+            BoundedSpaceConstants.MIN_SCALE_FACTOR,
+            BoundedSpaceConstants.MAX_SCALE_FACTOR
+        )
+        
+        // Apply the scaling
+        localScale = Vector3(scaleFactor, scaleFactor, scaleFactor)
+        
+        println("🎯 Bounded Space Applied: Model max dimension: ${maxModelDimension}m, Bounded space: ${boundedSpaceSize}m, Scale factor: ${scaleFactor}")
+    }
+    
+    /**
+     * Override this in subclasses to define different bounded space sizes for different node types
+     */
+    protected open fun getBoundedSpaceSize(): Float {
+        return BoundedSpaceConstants.DEFAULT_BOUNDED_SPACE_SIZE
     }
 
     override fun onUpdate(frameTime: FrameTime) {
@@ -204,6 +277,10 @@ class Sphere(
         makeOpaqueWithColor(context.applicationContext, color)
             .thenAccept { renderable = ShapeFactory.makeSphere(RADIUS, CENTER, it) }
     }
+    
+    override fun getBoundedSpaceSize(): Float {
+        return BoundedSpaceConstants.BASIC_SHAPES_BOUNDED_SPACE_SIZE
+    }
 }
 
 class Cylinder(
@@ -224,6 +301,10 @@ class Cylinder(
         makeOpaqueWithColor(context.applicationContext, color)
             .thenAccept { renderable = ShapeFactory.makeCylinder(RADIUS, HEIGHT, CENTER, it) }
     }
+    
+    override fun getBoundedSpaceSize(): Float {
+        return BoundedSpaceConstants.BASIC_SHAPES_BOUNDED_SPACE_SIZE
+    }
 }
 
 class Cube(
@@ -242,6 +323,10 @@ class Cube(
         val color = properties.color.toArColor()
         makeOpaqueWithColor(context.applicationContext, color)
             .thenAccept { renderable = ShapeFactory.makeCube(Vector3.one().scaled(SIZE), CENTER, it) }
+    }
+    
+    override fun getBoundedSpaceSize(): Float {
+        return BoundedSpaceConstants.BASIC_SHAPES_BOUNDED_SPACE_SIZE
     }
 }
 
@@ -385,6 +470,10 @@ class Layout(
             isShadowReceiver = false
         }
     }
+    
+    override fun getBoundedSpaceSize(): Float {
+        return BoundedSpaceConstants.LAYOUT_BOUNDED_SPACE_SIZE
+    }
 }
 
 class Andy(
@@ -394,10 +483,28 @@ class Andy(
 ) : Nodes("Andy", coordinator, settings) {
 
     init {
-        ModelRenderable.builder()
-            .setSource(context.applicationContext, R.raw.andy)
+        // Try the direct URL that worked in the links section
+        val catUri = "https://simon-marquis.fr/ar/Cat.glb".toUri()
+        ModelRenderable.builder().apply {
+            setSource(context.applicationContext, RenderableSource.builder().setSource(context.applicationContext, catUri, GLB).build())
+        }
+            .setRegistryId(catUri.toString())
             .build()
             .thenAccept { renderable = it }
+            .exceptionally { 
+                Log.e("Andy", "Failed to load cat model", it)
+                // Fallback to original andy model if cat fails
+                ModelRenderable.builder()
+                    .setSource(context.applicationContext, R.raw.andy)
+                    .build()
+                    .thenAccept { renderable = it }
+                null
+            }
+    }
+    
+    // Custom bounded space size for Cat model
+    override fun getBoundedSpaceSize(): Float {
+        return BoundedSpaceConstants.ANDY_CAT_BOUNDED_SPACE_SIZE
     }
 }
 
@@ -520,7 +627,7 @@ class Drawing(
 
 class Link(
     context: Context,
-    uri: Uri,
+    val uri: Uri,
     coordinator: Coordinator,
     settings: Settings,
 ) : Nodes("Link", coordinator, settings) {
@@ -552,6 +659,16 @@ class Link(
 
     init {
         warmup(context, uri).thenAccept { renderable = it }
+        
+        // Show dialog and schedule auto-replacement for URL-based nodes
+        if (context is SceneActivity) {
+            context.showLinkNodeDialog(this)
+        }
+    }
+    
+    // Custom bounded space size for external Link models (usually larger)
+    override fun getBoundedSpaceSize(): Float {
+        return BoundedSpaceConstants.EXTERNAL_LINK_BOUNDED_SPACE_SIZE
     }
 }
 
@@ -753,6 +870,10 @@ class Video(
                 it.material.setFloat4("keyColor", Color(0.1843f, 1.0f, 0.098f))
                 video.renderable = it
             }
+    }
+    
+    override fun getBoundedSpaceSize(): Float {
+        return BoundedSpaceConstants.VIDEO_BOUNDED_SPACE_SIZE
     }
 
     override fun onActivate() {
