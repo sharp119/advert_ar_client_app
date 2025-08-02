@@ -89,6 +89,50 @@ const WebSocket = require('ws');
 // For emulator, use 10.0.2.2:PORT. For physical device, use your machine's local IP:PORT.
 const PORT = 8080;
 
+// 3D Object URLs for dynamic replacement
+let available3DObjects = [
+    {
+        id: 'monster',
+        name: 'Monster',
+        url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/1.0/Monster/glTF/Monster.gltf'
+    },
+    {
+        id: 'shark',
+        name: 'Shark',
+        url: 'https://simon-marquis.fr/ar/Shark.glb'
+    },
+    {
+        id: 'astronaut',
+        name: 'Astronaut', 
+        url: 'https://simon-marquis.fr/ar/Astronaut.glb'
+    },
+    {
+        id: 'barramundi',
+        name: 'Barramundi Fish',
+        url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BarramundiFish/glTF/BarramundiFish.gltf'
+    },
+    {
+        id: 'campsite',
+        name: 'Camp Site',
+        url: 'https://simon-marquis.fr/ar/Camp Site.glb'
+    },
+    {
+        id: 'cat',
+        name: 'Cat',
+        url: 'https://simon-marquis.fr/ar/Cat.glb'
+    },
+    {
+        id: 'milktruck',
+        name: 'Cesium Milk Truck',
+        url: 'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/glTF/CesiumMilkTruck.gltf'
+    }
+];
+
+// Dynamic mapping system
+let currentMappings = new Map(); // nodeId -> 3D object
+let mappingActive = false;
+let shuffleTimer = null;
+
 // Create a new WebSocket server instance
 const wss = new WebSocket.Server({ port: PORT });
 
@@ -121,6 +165,10 @@ wss.on('connection', ws => {
                 
                 case 'anchorUpdate':
                     handleAnchorUpdateData(data);
+                    break;
+                
+                case 'modelLoadError':
+                    handleModelLoadError(data);
                     break;
                 
                 default:
@@ -248,6 +296,19 @@ function storeNodeData(data) {
     
     console.log(`💾 Stored node data. Total stored nodes: ${storedNodes.size}`);
     
+    // Check if we've reached the 5-anchor threshold to activate dynamic mapping
+    if (storedNodes.size >= 5 && !mappingActive) {
+        console.log(`\n🎯 === DYNAMIC MAPPING ACTIVATED ===`);
+        console.log(`5 anchors detected! Starting dynamic 3D object mapping system...`);
+        
+        mappingActive = true;
+        createInitialMapping();
+        startShuffleTimer();
+        
+        console.log(`🔀 Shuffle timer started - mappings will change every 20 seconds`);
+        console.log(`=====================================`);
+    }
+    
     // Optional: Log all stored nodes
     if (storedNodes.size <= 10) { // Only show if not too many
         console.log(`📋 Current stored nodes: ${Array.from(storedNodes.keys()).join(', ')}`);
@@ -266,6 +327,132 @@ function getAllStoredNodes() {
  */
 function getNodeById(nodeId) {
     return storedNodes.get(nodeId);
+}
+
+/**
+ * Creates initial random mapping between anchors and 3D objects
+ */
+function createInitialMapping() {
+    const nodeIds = Array.from(storedNodes.keys());
+    const shuffled3DObjects = [...available3DObjects].sort(() => Math.random() - 0.5);
+    
+    currentMappings.clear();
+    
+    nodeIds.forEach((nodeId, index) => {
+        const objectIndex = index % available3DObjects.length;
+        currentMappings.set(nodeId, shuffled3DObjects[objectIndex]);
+    });
+    
+    console.log(`\n🎲 === INITIAL MAPPING CREATED ===`);
+    currentMappings.forEach((obj, nodeId) => {
+        console.log(`${nodeId} -> ${obj.name} (${obj.url})`);
+    });
+    console.log(`==================================`);
+    
+    // Send initial mapping to all clients
+    sendMappingUpdateToClients();
+}
+
+/**
+ * Starts the 8-second shuffle timer
+ */
+function startShuffleTimer() {
+    if (shuffleTimer) {
+        clearInterval(shuffleTimer);
+    }
+    
+    shuffleTimer = setInterval(() => {
+        if (mappingActive && storedNodes.size >= 5) {
+            shuffleMappings();
+        }
+    }, 20000); // 20 seconds
+}
+
+/**
+ * Shuffles the current mappings randomly
+ */
+function shuffleMappings() {
+    const nodeIds = Array.from(storedNodes.keys());
+    const shuffled3DObjects = [...available3DObjects].sort(() => Math.random() - 0.5);
+    
+    currentMappings.clear();
+    
+    nodeIds.forEach((nodeId, index) => {
+        const objectIndex = index % available3DObjects.length;
+        currentMappings.set(nodeId, shuffled3DObjects[objectIndex]);
+    });
+    
+    console.log(`\n🔄 === MAPPINGS SHUFFLED (20s interval) ===`);
+    currentMappings.forEach((obj, nodeId) => {
+        console.log(`${nodeId} -> ${obj.name} (${obj.url})`);
+    });
+    console.log(`===========================================`);
+    
+    // Send updated mapping to all clients
+    sendMappingUpdateToClients();
+}
+
+/**
+ * Sends mapping updates to all connected clients
+ */
+function sendMappingUpdateToClients() {
+    const mappingData = {
+        type: 'objectMapping',
+        timestamp: Date.now(),
+        mappings: Array.from(currentMappings.entries()).map(([nodeId, obj]) => ({
+            nodeId: nodeId,
+            objectId: obj.id,
+            objectName: obj.name,
+            objectUrl: obj.url
+        }))
+    };
+    
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify(mappingData));
+        }
+    });
+    
+    console.log(`📤 Sent mapping update to ${wss.clients.size} clients`);
+}
+
+/**
+ * Handles model load error reports from clients
+ */
+function handleModelLoadError(data) {
+    console.log(`\n🚨 === MODEL LOAD ERROR ===`);
+    console.log(`Node ID: ${data.nodeId}`);
+    console.log(`Object URL: ${data.objectUrl}`);
+    console.log(`Error: ${data.error}`);
+    console.log(`============================`);
+    
+    // Remove the problematic model from available objects
+    removeProblematicModel(data.objectUrl);
+    
+    // If mapping is active, reshuffle to assign a different model
+    if (mappingActive) {
+        console.log(`🔄 Reshuffling mappings due to model load error...`);
+        shuffleMappings();
+    }
+}
+
+/**
+ * Removes a problematic 3D model from the available objects list
+ */
+function removeProblematicModel(problemUrl) {
+    const initialCount = available3DObjects.length;
+    available3DObjects = available3DObjects.filter(obj => obj.url !== problemUrl);
+    
+    if (available3DObjects.length < initialCount) {
+        console.log(`❌ Removed problematic model: ${problemUrl}`);
+        console.log(`📊 Available models reduced from ${initialCount} to ${available3DObjects.length}`);
+        
+        // Log remaining models
+        console.log(`🎯 Remaining models:`);
+        available3DObjects.forEach(obj => {
+            console.log(`  - ${obj.name}: ${obj.url}`);
+        });
+    }
 }
 
 // Event listener for server-wide errors (e.g., port already in use)

@@ -58,9 +58,10 @@ import fr.smarquis.ar_toolbox.databinding.DialogInputBinding
 import fr.smarquis.ar_toolbox.WebSocketManager // Import the new WebSocketManager class
 import com.google.ar.core.Pose // Ensure Pose is imported for type hinting
 import org.json.JSONObject // If you plan to use JSONObject directly in SceneActivity for other purposes
+import androidx.core.net.toUri // For converting strings to URI
 // ...
 
-class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inflate) {
+class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inflate), ObjectMappingListener {
 
     private val coordinator by lazy { Coordinator(this, ::onArTap, ::onNodeSelected, ::onNodeFocused) }
     private val model: SceneViewModel by viewModels()
@@ -69,6 +70,9 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
 
     lateinit var webSocketManager: WebSocketManager
     private val WEBSOCKET_SERVER_URL = "ws://192.168.1.4:8080" // Default for emulator
+    
+    // Simple tracking for delete-previous logic
+    var lastCreatedNode: Nodes? = null
 
 
     private val setOfMaterialViews by lazy {
@@ -120,6 +124,7 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
         initAr()
         initWithIntent(intent)
         webSocketManager = WebSocketManager(this, WEBSOCKET_SERVER_URL)
+        // Note: Not using object mapping listener in simplified delete-previous mode
         webSocketManager.initWebSocket()
     }
 
@@ -418,6 +423,13 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
     }
 
     private fun createNodeAndAddToScene(anchor: () -> Anchor, focus: Boolean = true) {
+        // Simple delete-previous logic: if we have a previous node, delete it first
+        lastCreatedNode?.let { previousNode ->
+            println("🗑️ Deleting previous node: ${previousNode.name}")
+            previousNode.setParent(null) // Delete the previous node
+            lastCreatedNode = null
+        }
+        
         val node = when (model.selection.value) {
             Sphere::class -> Sphere(this, materialProperties(), coordinator, settings)
             Cylinder::class -> Cylinder(this, materialProperties(), coordinator, settings)
@@ -433,6 +445,10 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
         
         // Attach the node to the scene
         node.attach(anchor(), arSceneView.scene, focus)
+        
+        // Store this as the last created node for future deletion
+        lastCreatedNode = node
+        println("✅ Created new node: ${node.name}")
         
         // Send anchor and transformation data to the server
         webSocketManager.sendNodeAnchorData(node)
@@ -595,5 +611,17 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
             }
             else -> Unit
         }
+    }
+    
+    // ========== ObjectMappingListener Implementation (Simplified) ==========
+    
+    override fun onObjectMappingUpdate(mappings: List<ObjectMapping>) {
+        println("📨 Received object mapping update (not used in simplified delete-previous mode)")
+        // No longer needed - we're using simple delete-previous logic
+    }
+    
+    override fun onMappingError(error: String) {
+        println("Object mapping error: $error")
+        // No action needed for simplified mode
     }
 }

@@ -12,6 +12,24 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
+ * Interface for handling object mapping updates from the server
+ */
+interface ObjectMappingListener {
+    fun onObjectMappingUpdate(mappings: List<ObjectMapping>)
+    fun onMappingError(error: String)
+}
+
+/**
+ * Data class representing a mapping between a node and a 3D object
+ */
+data class ObjectMapping(
+    val nodeId: String,
+    val objectId: String,
+    val objectName: String,
+    val objectUrl: String
+)
+
+/**
  * Manages WebSocket communication for sending AR pose data and other information to a server.
  *
  * @param context The application context, used for Toast messages.
@@ -24,6 +42,9 @@ class WebSocketManager(private val context: Context, private val serverUrl: Stri
     private val client = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS) // Disable read timeout for continuous streaming
         .build()
+    
+    // Listener for object mapping updates
+    var objectMappingListener: ObjectMappingListener? = null
 
     /**
      * Initializes and opens the WebSocket connection.
@@ -46,8 +67,23 @@ class WebSocketManager(private val context: Context, private val serverUrl: Stri
             override fun onMessage(webSocket: WebSocket, text: String) {
                 super.onMessage(webSocket, text)
                 println("Received from server: $text")
-                // TODO: Future enhancement: Implement logic to handle messages from the server
-                // (e.g., commands to change anchor visibility, update asset properties)
+                
+                try {
+                    val jsonData = JSONObject(text)
+                    val messageType = jsonData.optString("type", "")
+                    
+                    when (messageType) {
+                        "objectMapping" -> {
+                            handleObjectMappingMessage(jsonData)
+                        }
+                        else -> {
+                            println("Unknown message type: $messageType")
+                        }
+                    }
+                } catch (e: Exception) {
+                    println("Error parsing WebSocket message: ${e.message}")
+                    objectMappingListener?.onMappingError("Failed to parse server message: ${e.message}")
+                }
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
@@ -203,6 +239,62 @@ class WebSocketManager(private val context: Context, private val serverUrl: Stri
         }
 
         webSocket?.send(dataToSend.toString())
+    }
+
+    /**
+     * Handles object mapping messages from the server
+     */
+    private fun handleObjectMappingMessage(jsonData: JSONObject) {
+        try {
+            val mappingsArray = jsonData.getJSONArray("mappings")
+            val mappings = mutableListOf<ObjectMapping>()
+            
+            for (i in 0 until mappingsArray.length()) {
+                val mappingObj = mappingsArray.getJSONObject(i)
+                val mapping = ObjectMapping(
+                    nodeId = mappingObj.getString("nodeId"),
+                    objectId = mappingObj.getString("objectId"),
+                    objectName = mappingObj.getString("objectName"),
+                    objectUrl = mappingObj.getString("objectUrl")
+                )
+                mappings.add(mapping)
+            }
+            
+            println("Received ${mappings.size} object mappings from server")
+            mappings.forEach { mapping ->
+                println("  ${mapping.nodeId} -> ${mapping.objectName} (${mapping.objectUrl})")
+            }
+            
+            // Notify the listener on the main thread
+            (context as? ArActivity<*>)?.runOnUiThread {
+                objectMappingListener?.onObjectMappingUpdate(mappings)
+            }
+            
+        } catch (e: Exception) {
+            println("Error parsing object mapping message: ${e.message}")
+            objectMappingListener?.onMappingError("Failed to parse mapping data: ${e.message}")
+        }
+    }
+    
+    /**
+     * Sends model load error back to the server
+     */
+    fun sendModelLoadError(nodeId: String, objectUrl: String, error: String) {
+        if (webSocket == null) {
+            println("WebSocket is not initialized. Cannot send model load error.")
+            return
+        }
+        
+        val errorData = JSONObject().apply {
+            put("type", "modelLoadError")
+            put("timestamp", System.currentTimeMillis())
+            put("nodeId", nodeId)
+            put("objectUrl", objectUrl)
+            put("error", error)
+        }
+        
+        webSocket?.send(errorData.toString())
+        println("Sent model load error to server: $nodeId - $error")
     }
 
     /**

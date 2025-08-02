@@ -450,8 +450,18 @@ class Drawing(
                 attach(anchor, scene)
                 extend(x, y)
                 
-                // Send anchor data to server for Drawing nodes
+                // Handle delete-previous logic for Drawing nodes
                 if (context is SceneActivity) {
+                    // Delete previous node if exists
+                    context.lastCreatedNode?.let { previousNode ->
+                        println("🗑️ Deleting previous node for Drawing: ${previousNode.name}")
+                        previousNode.setParent(null)
+                    }
+                    // Store this Drawing as the last created node
+                    context.lastCreatedNode = this
+                    println("✅ Created new Drawing node: ${this.name}")
+                    
+                    // Send anchor data to server for Drawing nodes
                     context.webSocketManager.sendNodeAnchorData(this)
                 }
             }
@@ -601,8 +611,18 @@ class CloudAnchor(
             return CloudAnchor(context.applicationContext, session, coordinator, settings).also { 
                 it.attach(anchor, ar.scene) 
                 
-                // Send anchor data to server for resolved CloudAnchor nodes
+                // Handle delete-previous logic for CloudAnchor nodes
                 if (context is SceneActivity) {
+                    // Delete previous node if exists
+                    context.lastCreatedNode?.let { previousNode ->
+                        println("🗑️ Deleting previous node for CloudAnchor: ${previousNode.name}")
+                        previousNode.setParent(null)
+                    }
+                    // Store this CloudAnchor as the last created node
+                    context.lastCreatedNode = it
+                    println("✅ Created new CloudAnchor node: ${it.name}")
+                    
+                    // Send anchor data to server for resolved CloudAnchor nodes
                     context.webSocketManager.sendNodeAnchorData(it)
                 }
             }
