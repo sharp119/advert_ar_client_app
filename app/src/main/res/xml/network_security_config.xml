@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- This domain-config applies to all builds (debug and release) -->
+    <!-- It explicitly allows cleartext traffic for your specific local IP addresses. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Replace 192.168.1.8 with your actual computer's local IP address -->
+        <domain includeSubdomains="true">10.250.81.101</domain>
+        <!-- Include the emulator alias if you also test on emulator -->
+        <domain includeSubdomains="true">10.0.2.2</domain>
+    </domain-config>
+
+    <!-- Optional: Base configuration for all domains not covered by domain-config. -->
+    <!-- By default, cleartext traffic is NOT permitted for other domains. -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+
+    <!-- Optional: debug-overrides are typically for allowing user-installed certificates for debugging HTTPS,
+         or for specific debug-only network behaviors. It should NOT contain nested domain-config
+         if those domains are already handled globally.
+         You can remove this <debug-overrides> block entirely if you don't need it for other purposes. -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+        <!-- REMOVED: The nested <domain-config> that caused the error. -->
+    </debug-overrides>
+</network-security-config>
