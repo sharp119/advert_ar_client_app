@@ -450,16 +450,29 @@ class Drawing(
                 attach(anchor, scene)
                 extend(x, y)
                 
-                // Handle delete-previous logic for Drawing nodes
+                // Handle parameter storage and recreation for Drawing nodes
                 if (context is SceneActivity) {
                     // Delete previous node if exists
                     context.lastCreatedNode?.let { previousNode ->
                         println("🗑️ Deleting previous node for Drawing: ${previousNode.name}")
                         previousNode.setParent(null)
+                        context.lastCreatedNode = null
                     }
+                    
                     // Store this Drawing as the last created node
                     context.lastCreatedNode = this
                     println("✅ Created new Drawing node: ${this.name}")
+                    
+                    // Store current Drawing parameters for recreation
+                    val anchorPose = anchor.pose
+                    val anchorData = context.createAnchorData(anchorPose)
+                    val currentDrawingParams = context.createDrawingParams(properties, anchorData)
+                    
+                    // Schedule recreation of previous Drawing if it exists
+                    context.schedulePreviousRecreation()
+                    
+                    // Store current parameters as previous for next time
+                    context.storePreviousParams(currentDrawingParams)
                     
                     // Send anchor data to server for Drawing nodes
                     context.webSocketManager.sendNodeAnchorData(this)
@@ -611,16 +624,29 @@ class CloudAnchor(
             return CloudAnchor(context.applicationContext, session, coordinator, settings).also { 
                 it.attach(anchor, ar.scene) 
                 
-                // Handle delete-previous logic for CloudAnchor nodes
+                // Handle parameter storage and recreation for CloudAnchor nodes  
                 if (context is SceneActivity) {
                     // Delete previous node if exists
                     context.lastCreatedNode?.let { previousNode ->
                         println("🗑️ Deleting previous node for CloudAnchor: ${previousNode.name}")
                         previousNode.setParent(null)
+                        context.lastCreatedNode = null
                     }
+                    
                     // Store this CloudAnchor as the last created node
                     context.lastCreatedNode = it
                     println("✅ Created new CloudAnchor node: ${it.name}")
+                    
+                    // Store current CloudAnchor parameters for recreation
+                    val anchorPose = anchor.pose
+                    val anchorData = context.createAnchorData(anchorPose)
+                    val currentCloudParams = context.createCloudAnchorParams(anchorData)
+                    
+                    // Schedule recreation of previous node if it exists
+                    context.schedulePreviousRecreation()
+                    
+                    // Store current parameters as previous for next time
+                    context.storePreviousParams(currentCloudParams)
                     
                     // Send anchor data to server for resolved CloudAnchor nodes
                     context.webSocketManager.sendNodeAnchorData(it)

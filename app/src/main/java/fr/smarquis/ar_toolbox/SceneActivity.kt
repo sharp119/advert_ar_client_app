@@ -61,6 +61,24 @@ import org.json.JSONObject // If you plan to use JSONObject directly in SceneAct
 import androidx.core.net.toUri // For converting strings to URI
 // ...
 
+/**
+ * Data class to store exact node creation parameters for recreation
+ */
+data class NodeCreationParams(
+    val nodeType: kotlin.reflect.KClass<out Nodes>,
+    val materialProperties: MaterialProperties?,
+    val externalUri: android.net.Uri?,
+    val anchorData: AnchorData
+)
+
+/**
+ * Data class to store anchor information for recreation
+ */
+data class AnchorData(
+    val position: com.google.ar.sceneform.math.Vector3,
+    val rotation: com.google.ar.sceneform.math.Quaternion
+)
+
 class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inflate), ObjectMappingListener {
 
     private val coordinator by lazy { Coordinator(this, ::onArTap, ::onNodeSelected, ::onNodeFocused) }
@@ -73,6 +91,9 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
     
     // Simple tracking for delete-previous logic
     var lastCreatedNode: Nodes? = null
+    
+    // Store creation parameters for recreation
+    private var previousNodeParams: NodeCreationParams? = null
 
 
     private val setOfMaterialViews by lazy {
@@ -423,35 +444,152 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
     }
 
     private fun createNodeAndAddToScene(anchor: () -> Anchor, focus: Boolean = true) {
-        // Simple delete-previous logic: if we have a previous node, delete it first
+        // Step 1: Delete previous node if it exists
         lastCreatedNode?.let { previousNode ->
             println("🗑️ Deleting previous node: ${previousNode.name}")
-            previousNode.setParent(null) // Delete the previous node
+            previousNode.setParent(null)
             lastCreatedNode = null
         }
         
+        // Step 2: Create the new node with exact parameter storage
+        val currentAnchor = anchor()
+        val anchorPose = currentAnchor.pose
+        val anchorData = AnchorData(
+            position = com.google.ar.sceneform.math.Vector3(anchorPose.translation[0], anchorPose.translation[1], anchorPose.translation[2]),
+            rotation = com.google.ar.sceneform.math.Quaternion(anchorPose.rotationQuaternion[0], anchorPose.rotationQuaternion[1], anchorPose.rotationQuaternion[2], anchorPose.rotationQuaternion[3])
+        )
+        
+        val currentMaterials = when (model.selection.value) {
+            Sphere::class, Cylinder::class, Cube::class, Measure::class -> materialProperties()
+            else -> null
+        }
+        
+        val currentUri = when (model.selection.value) {
+            Link::class -> model.externalModelUri.value.orEmpty().toUri()
+            else -> null
+        }
+        
         val node = when (model.selection.value) {
-            Sphere::class -> Sphere(this, materialProperties(), coordinator, settings)
-            Cylinder::class -> Cylinder(this, materialProperties(), coordinator, settings)
-            Cube::class -> Cube(this, materialProperties(), coordinator, settings)
+            Sphere::class -> Sphere(this, currentMaterials!!, coordinator, settings)
+            Cylinder::class -> Cylinder(this, currentMaterials!!, coordinator, settings)
+            Cube::class -> Cube(this, currentMaterials!!, coordinator, settings)
             Layout::class -> Layout(this, coordinator, settings)
             Andy::class -> Andy(this, coordinator, settings)
             Video::class -> Video(this, coordinator, settings)
-            Measure::class -> Measure(this, materialProperties(), coordinator, settings)
-            Link::class -> Link(this, model.externalModelUri.value.orEmpty().toUri(), coordinator, settings)
+            Measure::class -> Measure(this, currentMaterials!!, coordinator, settings)
+            Link::class -> Link(this, currentUri!!, coordinator, settings)
             CloudAnchor::class -> CloudAnchor(this, arSceneView.session ?: return, coordinator, settings)
             else -> return
         }
         
-        // Attach the node to the scene
-        node.attach(anchor(), arSceneView.scene, focus)
-        
-        // Store this as the last created node for future deletion
+        // Step 3: Attach the new node
+        node.attach(currentAnchor, arSceneView.scene, focus)
         lastCreatedNode = node
         println("✅ Created new node: ${node.name}")
         
-        // Send anchor and transformation data to the server
+        // Step 4: Store current node parameters for future recreation
+        val currentNodeParams = NodeCreationParams(
+            nodeType = model.selection.value!!,
+            materialProperties = currentMaterials,
+            externalUri = currentUri,
+            anchorData = anchorData
+        )
+        
+        // Step 5: If we have previous parameters, schedule recreation after 2 seconds
+        previousNodeParams?.let { prevParams ->
+            println("⏰ Scheduling recreation of previous node in 2 seconds...")
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                recreateNodeFromParams(prevParams)
+            }, 2000) // 2 seconds delay
+        }
+        
+        // Step 6: Store current parameters as previous for next time
+        previousNodeParams = currentNodeParams
+        
+        // Step 7: Send anchor data to server
         webSocketManager.sendNodeAnchorData(node)
+    }
+    
+    /**
+     * Recreates a node from stored parameters at the exact same location
+     */
+    private fun recreateNodeFromParams(params: NodeCreationParams) {
+        println("🔄 Recreating node: ${params.nodeType.simpleName}")
+        
+        // Create anchor at stored position and rotation
+        val session = arSceneView.session ?: return
+        val pose = com.google.ar.core.Pose(
+            floatArrayOf(params.anchorData.position.x, params.anchorData.position.y, params.anchorData.position.z),
+            floatArrayOf(params.anchorData.rotation.x, params.anchorData.rotation.y, params.anchorData.rotation.z, params.anchorData.rotation.w)
+        )
+        val recreatedAnchor = session.createAnchor(pose)
+        
+        // Create node with exact same parameters
+        val recreatedNode = when (params.nodeType) {
+            Sphere::class -> Sphere(this, params.materialProperties!!, coordinator, settings)
+            Cylinder::class -> Cylinder(this, params.materialProperties!!, coordinator, settings)
+            Cube::class -> Cube(this, params.materialProperties!!, coordinator, settings)
+            Layout::class -> Layout(this, coordinator, settings)
+            Andy::class -> Andy(this, coordinator, settings)
+            Video::class -> Video(this, coordinator, settings)
+            Measure::class -> Measure(this, params.materialProperties!!, coordinator, settings)
+            Link::class -> Link(this, params.externalUri!!, coordinator, settings)
+            CloudAnchor::class -> CloudAnchor(this, session, coordinator, settings)
+            Drawing::class -> {
+                // For Drawing, create a simple Drawing without extending (no line drawing)
+                Drawing(false, null, params.materialProperties!!, coordinator, settings)
+            }
+            else -> return
+        }
+        
+        // Attach to scene at exact stored location
+        recreatedNode.attach(recreatedAnchor, arSceneView.scene, false) // no focus for recreated nodes
+        
+        println("✅ Successfully recreated: ${recreatedNode.name} at stored location")
+        
+        // Send data to server for recreated node
+        webSocketManager.sendNodeAnchorData(recreatedNode)
+    }
+    
+    /**
+     * Helper functions for Drawing parameter storage
+     */
+    fun createAnchorData(pose: com.google.ar.core.Pose): AnchorData {
+        return AnchorData(
+            position = com.google.ar.sceneform.math.Vector3(pose.translation[0], pose.translation[1], pose.translation[2]),
+            rotation = com.google.ar.sceneform.math.Quaternion(pose.rotationQuaternion[0], pose.rotationQuaternion[1], pose.rotationQuaternion[2], pose.rotationQuaternion[3])
+        )
+    }
+    
+    fun createDrawingParams(properties: MaterialProperties, anchorData: AnchorData): NodeCreationParams {
+        return NodeCreationParams(
+            nodeType = Drawing::class,
+            materialProperties = properties,
+            externalUri = null,
+            anchorData = anchorData
+        )
+    }
+    
+    fun createCloudAnchorParams(anchorData: AnchorData): NodeCreationParams {
+        return NodeCreationParams(
+            nodeType = CloudAnchor::class,
+            materialProperties = null,
+            externalUri = null,
+            anchorData = anchorData
+        )
+    }
+    
+    fun schedulePreviousRecreation() {
+        previousNodeParams?.let { prevParams ->
+            println("⏰ Scheduling recreation of previous node in 2 seconds...")
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                recreateNodeFromParams(prevParams)
+            }, 2000)
+        }
+    }
+    
+    fun storePreviousParams(params: NodeCreationParams) {
+        previousNodeParams = params
     }
 
     private fun onArUpdate() {
