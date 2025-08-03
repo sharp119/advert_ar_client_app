@@ -10,6 +10,41 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Venue display below notification bar -->
+    <LinearLayout
+        android:id="@+id/venue_display"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:orientation="horizontal"
+        android:background="#80000000"
+        android:padding="16dp"
+        android:paddingTop="48dp"
+        android:gravity="center"
+        android:visibility="gone"
+        android:fitsSystemWindows="true">
+
+        <TextView
+            android:id="@+id/venue_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="venue1"
+            android:textColor="@android:color/white"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginEnd="16dp" />
+
+        <TextView
+            android:id="@+id/venue_coordinates"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="37.7749, -122.4194"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            android:alpha="0.8" />
+
+    </LinearLayout>
+
     <include
         android:id="@+id/bottomSheetScene"
         layout="@layout/bottom_sheet_scene" />

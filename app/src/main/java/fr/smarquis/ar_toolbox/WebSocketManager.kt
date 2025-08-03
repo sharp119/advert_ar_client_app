@@ -298,6 +298,28 @@ class WebSocketManager(private val context: Context, private val serverUrl: Stri
     }
 
     /**
+     * Sends location and venue data to the server
+     */
+    fun sendLocationData(venueName: String, latitude: Double, longitude: Double, accuracy: Float) {
+        if (webSocket == null) {
+            println("WebSocket is not initialized or closed. Cannot send location data.")
+            return
+        }
+
+        val locationData = JSONObject().apply {
+            put("type", "locationUpdate")
+            put("timestamp", System.currentTimeMillis())
+            put("venueName", venueName)
+            put("latitude", latitude)
+            put("longitude", longitude)
+            put("accuracy", accuracy)
+        }
+
+        webSocket?.send(locationData.toString())
+        println("Sent location data to server: $venueName at ($latitude, $longitude)")
+    }
+
+    /**
      * Closes the WebSocket connection gracefully.
      * This should be called when the activity is paused or destroyed.
      */

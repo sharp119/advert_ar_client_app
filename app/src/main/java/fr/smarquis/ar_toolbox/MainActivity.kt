@@ -22,16 +22,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupButtons() {
         binding.btnAnchor.setOnClickListener {
-            // Navigate to AR Scene (current main functionality)
-            val intent = Intent(this, SceneActivity::class.java)
+            // Navigate to location loading screen for Anchor mode
+            val intent = Intent(this, LocationLoadingActivity::class.java)
             intent.putExtra("mode", "anchor")
             startActivity(intent)
             finish()
         }
 
         binding.btnViewer.setOnClickListener {
-            // For now, also navigate to SceneActivity but with viewer mode
-            // In future, this could navigate to a different activity
+            // Viewer mode goes directly to AR (no location detection needed)
             val intent = Intent(this, SceneActivity::class.java)
             intent.putExtra("mode", "viewer")
             startActivity(intent)

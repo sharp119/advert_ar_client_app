@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'; // Import OrbitControls
 
 const WEBSOCKET_URL = 'ws://localhost:8080'; // Your Node.js WebSocket server URL
+const API_URL = 'http://localhost:3001'; // HTTP API server URL
 
 const ThreeDGraphViewer = () => {
   const mountRef = useRef(null); // Reference to the DOM element to mount the Three.js canvas
@@ -25,6 +26,9 @@ const ThreeDGraphViewer = () => {
   // State and references for anchor points
   const [anchorPoints, setAnchorPoints] = useState(new Map());
   const anchorMeshesRef = useRef(new Map());
+
+  // State for location and venue data
+  const [locationData, setLocationData] = useState(null);
 
   // Function to update the path line in the scene
   const updatePathLine = useCallback(() => {
@@ -287,11 +291,78 @@ const ThreeDGraphViewer = () => {
     updateAnchorPoints();
   }, [anchorPoints, updateAnchorPoints]);
 
+  // Function to fetch location data from API
+  const fetchLocationData = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/location`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          setLocationData(result.data);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch location data:', error);
+    }
+  }, []);
+
+  // Effect to fetch location data periodically
+  useEffect(() => {
+    // Fetch immediately
+    fetchLocationData();
+    
+    // Then fetch every 5 seconds
+    const interval = setInterval(fetchLocationData, 5000);
+    
+    return () => clearInterval(interval);
+  }, [fetchLocationData]);
+
   return (
-    <div
-      ref={mountRef}
-      style={{ width: '100vw', height: '100vh', overflow: 'hidden' }} // Full viewport size
-    />
+    <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+      {/* 3D Canvas */}
+      <div
+        ref={mountRef}
+        style={{ width: '100%', height: '100%' }}
+      />
+      
+      {/* Venue Display Overlay */}
+      {locationData && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '20px',
+            left: '20px',
+            right: '20px',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            color: 'white',
+            padding: '16px',
+            borderRadius: '8px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            zIndex: 1000,
+            fontFamily: 'Arial, sans-serif'
+          }}
+        >
+          <div>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: '24px', fontWeight: 'bold' }}>
+              {locationData.venueName}
+            </h2>
+            <p style={{ margin: 0, fontSize: '14px', opacity: 0.8 }}>
+              {locationData.latitude.toFixed(6)}, {locationData.longitude.toFixed(6)}
+            </p>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <p style={{ margin: '0 0 4px 0', fontSize: '12px', opacity: 0.6 }}>
+              Accuracy: {locationData.accuracy.toFixed(1)}m
+            </p>
+            <p style={{ margin: 0, fontSize: '12px', opacity: 0.6 }}>
+              Updated: {new Date(locationData.timestamp).toLocaleTimeString()}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

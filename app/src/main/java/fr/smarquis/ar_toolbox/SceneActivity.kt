@@ -92,6 +92,12 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
     // Mode tracking (anchor or viewer)
     private var appMode: String = "anchor" // default to anchor mode
     
+    // Location and venue data
+    private var venueName: String? = null
+    private var latitude: Double = 0.0
+    private var longitude: Double = 0.0
+    private var accuracy: Float = 0.0f
+    
     // Simple tracking for delete-previous logic
     var lastCreatedNode: Nodes? = null
     
@@ -147,6 +153,12 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
         // Get the mode from intent
         appMode = intent.getStringExtra("mode") ?: "anchor"
         
+        // Get location data from intent (if coming from LocationLoadingActivity)
+        venueName = intent.getStringExtra("venue_name")
+        latitude = intent.getDoubleExtra("latitude", 0.0)
+        longitude = intent.getDoubleExtra("longitude", 0.0)
+        accuracy = intent.getFloatExtra("accuracy", 0.0f)
+        
         initSceneBottomSheet()
         initNodeBottomSheet()
         initAr()
@@ -170,6 +182,22 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
                 // Anchor mode: Show only essential elements
                 supportActionBar?.title = "Expolens - Anchor Mode"
                 Toast.makeText(this, "🔗 Anchor Mode: Create and place AR objects", Toast.LENGTH_LONG).show()
+                
+                // Show venue information if available
+                if (venueName != null) {
+                    binding.venueDisplay.visibility = View.VISIBLE
+                    binding.venueName.text = venueName
+                    binding.venueCoordinates.text = String.format("%.4f, %.4f", latitude, longitude)
+                    
+                    // Adjust top margin to account for status bar
+                    val statusBarHeight = getStatusBarHeight()
+                    val layoutParams = binding.venueDisplay.layoutParams as androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams
+                    layoutParams.topMargin = statusBarHeight + 16 // 16dp additional margin
+                    binding.venueDisplay.layoutParams = layoutParams
+                    
+                    // Send location data to server
+                    sendLocationDataToServer()
+                }
                 
                 // Show only: URL option (link), shapes (sphere, cube, cylinder), stats and color remain visible
                 with(bottomSheetScene.body) {
@@ -212,6 +240,23 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
                     cloudAnchor.visibility = View.GONE    // Cloud Anchor
                 }
             }
+        }
+    }
+    
+    private fun sendLocationDataToServer() {
+        if (venueName != null) {
+            webSocketManager.sendLocationData(venueName!!, latitude, longitude, accuracy)
+        }
+    }
+    
+    private fun getStatusBarHeight(): Int {
+        val resourceId = resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (resourceId > 0) {
+            resources.getDimensionPixelSize(resourceId)
+        } else {
+            // Fallback: approximate status bar height in dp converted to pixels
+            val density = resources.displayMetrics.density
+            (24 * density).toInt() // 24dp is typical status bar height
         }
     }
 

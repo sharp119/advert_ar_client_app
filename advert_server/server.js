@@ -472,13 +472,64 @@
 
 
 
-// Import the WebSocket library
+// Import the WebSocket library and HTTP server
 const WebSocket = require('ws');
+const http = require('http');
+const url = require('url');
 
 // Define the port for the WebSocket server
 // This port must be accessible from your Android device/emulator.
 // For emulator, use 10.0.2.2:PORT. For physical device, use your machine's local IP:PORT.
 const PORT = 8080;
+const HTTP_PORT = 3001;
+
+// Create HTTP server for API endpoints
+const httpServer = http.createServer((req, res) => {
+    const parsedUrl = url.parse(req.url, true);
+    
+    // Enable CORS for frontend access
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+    }
+    
+    if (parsedUrl.pathname === '/api/location' && req.method === 'GET') {
+        // Return current location data
+        const location = getCurrentLocation();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: true,
+            data: location
+        }));
+    } else if (parsedUrl.pathname === '/api/nodes' && req.method === 'GET') {
+        // Return all stored nodes
+        const nodes = getAllStoredNodes();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: true,
+            data: nodes
+        }));
+    } else {
+        // 404 for unknown endpoints
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: false,
+            error: 'Endpoint not found'
+        }));
+    }
+});
+
+// Start HTTP server
+httpServer.listen(HTTP_PORT, () => {
+    console.log(`🌐 HTTP API server started on http://localhost:${HTTP_PORT}`);
+    console.log(`   - GET /api/location - Get current venue and location data`);
+    console.log(`   - GET /api/nodes - Get all AR nodes data`);
+});
 
 // Create a new WebSocket server instance
 const wss = new WebSocket.Server({ port: PORT });
@@ -512,6 +563,10 @@ wss.on('connection', ws => {
                 
                 case 'anchorUpdate':
                     handleAnchorUpdateData(data);
+                    break;
+                
+                case 'locationUpdate':
+                    handleLocationData(data);
                     break;
                 
                 default:
@@ -613,6 +668,21 @@ function handleAnchorUpdateData(data) {
 }
 
 /**
+ * Handles location and venue data
+ */
+function handleLocationData(data) {
+    console.log(`\n📍 === LOCATION UPDATE ===`);
+    console.log(`Timestamp: ${new Date(data.timestamp).toISOString()}`);
+    console.log(`Venue: ${data.venueName}`);
+    console.log(`Coordinates: ${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)}`);
+    console.log(`Accuracy: ${data.accuracy.toFixed(2)}m`);
+    console.log(`===========================`);
+    
+    // Store location data for use by frontend
+    storeLocationData(data);
+}
+
+/**
  * Store node data for future use (replace with your preferred storage method)
  */
 const storedNodes = new Map();
@@ -657,6 +727,30 @@ function getAllStoredNodes() {
  */
 function getNodeById(nodeId) {
     return storedNodes.get(nodeId);
+}
+
+/**
+ * Store location data
+ */
+let currentLocation = null;
+
+function storeLocationData(data) {
+    currentLocation = {
+        venueName: data.venueName,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        accuracy: data.accuracy,
+        timestamp: data.timestamp
+    };
+    
+    console.log(`📍 Stored location data: ${data.venueName} at (${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)})`);
+}
+
+/**
+ * Helper function to get current location data (for frontend API)
+ */
+function getCurrentLocation() {
+    return currentLocation;
 }
 
 // Event listener for server-wide errors (e.g., port already in use)

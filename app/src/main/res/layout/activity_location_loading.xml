@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="32dp"
+    android:background="@android:color/white">
+
+    <!-- App Title -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/app_name"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/black"
+        android:layout_marginBottom="48dp"
+        android:gravity="center" />
+
+    <!-- Loading Animation -->
+    <ProgressBar
+        android:id="@+id/loading_progress"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:layout_marginBottom="32dp"
+        android:indeterminateTint="@android:color/holo_blue_bright" />
+
+    <!-- Status Text -->
+    <TextView
+        android:id="@+id/status_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Detecting location..."
+        android:textSize="18sp"
+        android:textColor="@android:color/darker_gray"
+        android:layout_marginBottom="16dp"
+        android:gravity="center" />
+
+    <!-- Venue Detection Text -->
+    <TextView
+        android:id="@+id/venue_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="@android:color/holo_blue_bright"
+        android:gravity="center"
+        android:visibility="gone" />
+
+</LinearLayout>
