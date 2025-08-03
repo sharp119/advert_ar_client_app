@@ -318,14 +318,14 @@ const ThreeDGraphViewer = () => {
   }, [fetchLocationData]);
 
   return (
-    <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+    <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
       {/* 3D Canvas */}
       <div
         ref={mountRef}
         style={{ width: '100%', height: '100%' }}
       />
       
-      {/* Venue Display Overlay */}
+      {/* Venue Display Overlay - Positioned for center panel */}
       {locationData && (
         <div
           style={{
@@ -333,35 +333,91 @@ const ThreeDGraphViewer = () => {
             top: '20px',
             left: '20px',
             right: '20px',
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
             color: 'white',
-            padding: '16px',
+            padding: '12px 16px',
             borderRadius: '8px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             zIndex: 1000,
-            fontFamily: 'Arial, sans-serif'
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '14px',
+            border: '1px solid #444'
           }}
         >
           <div>
-            <h2 style={{ margin: '0 0 8px 0', fontSize: '24px', fontWeight: 'bold' }}>
-              {locationData.venueName}
+            <h2 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 'bold' }}>
+              📍 {locationData.venueName}
             </h2>
-            <p style={{ margin: 0, fontSize: '14px', opacity: 0.8 }}>
+            <p style={{ margin: 0, fontSize: '12px', opacity: 0.8 }}>
               {locationData.latitude.toFixed(6)}, {locationData.longitude.toFixed(6)}
             </p>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <p style={{ margin: '0 0 4px 0', fontSize: '12px', opacity: 0.6 }}>
+            <p style={{ margin: '0 0 2px 0', fontSize: '11px', opacity: 0.6 }}>
               Accuracy: {locationData.accuracy.toFixed(1)}m
             </p>
-            <p style={{ margin: 0, fontSize: '12px', opacity: 0.6 }}>
-              Updated: {new Date(locationData.timestamp).toLocaleTimeString()}
+            <p style={{ margin: 0, fontSize: '11px', opacity: 0.6 }}>
+              {new Date(locationData.timestamp).toLocaleTimeString()}
             </p>
           </div>
         </div>
       )}
+
+      {/* Statistics overlay */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '20px',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          color: 'white',
+          padding: '12px',
+          borderRadius: '6px',
+          fontSize: '12px',
+          fontFamily: 'monospace',
+          border: '1px solid #444',
+          zIndex: 1000
+        }}
+      >
+        <div style={{ marginBottom: '4px' }}>
+          📊 Stats
+        </div>
+        <div style={{ color: '#4CAF50' }}>
+          Path Points: {pathPoints.length}
+        </div>
+        <div style={{ color: '#2196F3' }}>
+          Anchors: {anchorPoints.size}
+        </div>
+      </div>
+
+      {/* Controls info */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '20px',
+          right: '20px',
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          color: 'white',
+          padding: '12px',
+          borderRadius: '6px',
+          fontSize: '11px',
+          fontFamily: 'Arial, sans-serif',
+          border: '1px solid #444',
+          zIndex: 1000,
+          maxWidth: '200px'
+        }}
+      >
+        <div style={{ marginBottom: '6px', fontWeight: 'bold' }}>
+          🎮 Controls
+        </div>
+        <div style={{ opacity: 0.8, lineHeight: 1.3 }}>
+          • Mouse: Rotate view<br/>
+          • Scroll: Zoom in/out<br/>
+          • Drag: Pan camera
+        </div>
+      </div>
     </div>
   );
 };

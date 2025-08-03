@@ -1,15 +1,92 @@
-// src/app/page.js
-import ThreeDGraphViewer from '@/components/ThreeDGraphViewer'; // Adjust path if needed
+// src/app/map/page.js
+"use client";
+import ThreeDGraphViewer from '@/components/ThreeDGraphViewer';
+import NodePanel from '@/components/NodePanel';
+import ModelPanel from '@/components/ModelPanel';
 
-export default function Home() {
+export default function MapPage() {
   return (
-    <main>
-      <h1>AR Device Tracker</h1>
-      <p>Live 3D visualization of your AR device's position and orientation.</p>
-      <div style={{ position: 'relative', width: '100%', height: 'calc(100vh - 100px)' }}>
-        {/* The 3D viewer will take up the remaining height */}
+    <div style={{ 
+      display: 'flex', 
+      width: '100vw', 
+      height: '100vh', 
+      fontFamily: 'Arial, sans-serif',
+      backgroundColor: '#f0f0f0'
+    }}>
+      {/* Left Panel - Node Cards */}
+      <div style={{ 
+        width: '300px', 
+        backgroundColor: '#2a2a2a', 
+        borderRight: '2px solid #444',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        <div style={{
+          padding: '20px',
+          borderBottom: '1px solid #444',
+          backgroundColor: '#1a1a1a'
+        }}>
+          <h2 style={{ 
+            margin: 0, 
+            color: '#fff', 
+            fontSize: '18px',
+            fontWeight: 'bold'
+          }}>
+            🎯 AR Nodes
+          </h2>
+          <p style={{ 
+            margin: '8px 0 0 0', 
+            color: '#aaa', 
+            fontSize: '14px' 
+          }}>
+            Placed anchor points
+          </p>
+        </div>
+        <NodePanel />
+      </div>
+
+      {/* Center Panel - 3D Visualizer */}
+      <div style={{ 
+        flex: 1, 
+        position: 'relative',
+        backgroundColor: '#1a1a1a'
+      }}>
         <ThreeDGraphViewer />
       </div>
-    </main>
+
+      {/* Right Panel - 3D Models */}
+      <div style={{ 
+        width: '300px', 
+        backgroundColor: '#2a2a2a', 
+        borderLeft: '2px solid #444',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        <div style={{
+          padding: '20px',
+          borderBottom: '1px solid #444',
+          backgroundColor: '#1a1a1a'
+        }}>
+          <h2 style={{ 
+            margin: 0, 
+            color: '#fff', 
+            fontSize: '18px',
+            fontWeight: 'bold'
+          }}>
+            🎲 3D Models
+          </h2>
+          <p style={{ 
+            margin: '8px 0 0 0', 
+            color: '#aaa', 
+            fontSize: '14px' 
+          }}>
+            Available assets
+          </p>
+        </div>
+        <ModelPanel />
+      </div>
+    </div>
   );
 }
