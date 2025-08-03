@@ -660,10 +660,12 @@ class Link(
     init {
         warmup(context, uri).thenAccept { renderable = it }
         
-        // Show dialog and schedule auto-replacement for URL-based nodes
+        // Show dialog and schedule auto-replacement for URL-based nodes - COMMENTED OUT FOR STATIC PLACEMENT
+        /*
         if (context is SceneActivity) {
             context.showLinkNodeDialog(this)
         }
+        */
     }
     
     // Custom bounded space size for external Link models (usually larger)

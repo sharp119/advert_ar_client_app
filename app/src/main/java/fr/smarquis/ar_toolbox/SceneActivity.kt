@@ -167,32 +167,49 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
     private fun configureUIForMode() {
         when (appMode) {
             "anchor" -> {
-                // Anchor mode: Enable all object creation functionality
-                // This is the default behavior - no changes needed
+                // Anchor mode: Show only essential elements
                 supportActionBar?.title = "Expolens - Anchor Mode"
                 Toast.makeText(this, "🔗 Anchor Mode: Create and place AR objects", Toast.LENGTH_LONG).show()
+                
+                // Show only: URL option (link), shapes (sphere, cube, cylinder), stats and color remain visible
+                with(bottomSheetScene.body) {
+                    // Keep these visible:
+                    sphere.visibility = View.VISIBLE      // Shape
+                    cylinder.visibility = View.VISIBLE    // Shape  
+                    cube.visibility = View.VISIBLE        // Shape
+                    link.visibility = View.VISIBLE        // URL option
+                    colorValue.visibility = View.VISIBLE  // Color option
+                    
+                    // Hide everything else:
+                    view.visibility = View.GONE           // Layout
+                    drawing.visibility = View.GONE        // Drawing
+                    measure.visibility = View.GONE        // Measure
+                    andy.visibility = View.GONE           // Andy
+                    video.visibility = View.GONE          // Video
+                    cloudAnchor.visibility = View.GONE    // Cloud Anchor
+                }
             }
             "viewer" -> {
-                // Viewer mode: Disable object creation, focus on viewing
+                // Viewer mode: Identical functionality to Anchor mode (just a demonstration gimmick)
                 supportActionBar?.title = "Expolens - Viewer Mode"
                 Toast.makeText(this, "👁️ Viewer Mode: View and track AR objects", Toast.LENGTH_LONG).show()
                 
-                // Disable the add button in viewer mode
-                bottomSheetScene.header.add.isEnabled = false
-                bottomSheetScene.header.add.alpha = 0.5f
-                
-                // Hide object selection options in viewer mode
+                // Exact same UI as Anchor mode
                 with(bottomSheetScene.body) {
-                    sphere.visibility = View.GONE
-                    cylinder.visibility = View.GONE
-                    cube.visibility = View.GONE
-                    view.visibility = View.GONE
-                    drawing.visibility = View.GONE
-                    measure.visibility = View.GONE
-                    andy.visibility = View.GONE
-                    video.visibility = View.GONE
-                    link.visibility = View.GONE
-                    cloudAnchor.visibility = View.GONE
+                    // Keep these visible:
+                    sphere.visibility = View.VISIBLE      // Shape
+                    cylinder.visibility = View.VISIBLE    // Shape  
+                    cube.visibility = View.VISIBLE        // Shape
+                    link.visibility = View.VISIBLE        // URL option
+                    colorValue.visibility = View.VISIBLE  // Color option
+                    
+                    // Hide everything else:
+                    view.visibility = View.GONE           // Layout
+                    drawing.visibility = View.GONE        // Drawing
+                    measure.visibility = View.GONE        // Measure
+                    andy.visibility = View.GONE           // Andy
+                    video.visibility = View.GONE          // Video
+                    cloudAnchor.visibility = View.GONE    // Cloud Anchor
                 }
             }
         }
@@ -503,12 +520,14 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
     }
 
     private fun createNodeAndAddToScene(anchor: () -> Anchor, focus: Boolean = true) {
-        // Step 1: Delete previous node if it exists
+        // Step 1: Delete previous node if it exists - COMMENTED OUT FOR SMOOTH PLACEMENT
+        /*
         lastCreatedNode?.let { previousNode ->
             println("🗑️ Deleting previous node: ${previousNode.name}")
             previousNode.setParent(null)
             lastCreatedNode = null
         }
+        */
         
         // Step 2: Create the new node with exact parameter storage
         val currentAnchor = anchor()
@@ -543,7 +562,7 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
         
         // Step 3: Attach the new node
         node.attach(currentAnchor, arSceneView.scene, focus)
-        lastCreatedNode = node
+        // lastCreatedNode = node  // COMMENTED OUT - No longer tracking for deletion
         println("✅ Created new node: ${node.name}")
         
         // Step 4: Store current node parameters for future recreation
@@ -554,7 +573,8 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
             anchorData = anchorData
         )
         
-        // Step 5: If we have previous parameters, schedule recreation after 2 seconds
+        // Step 5: If we have previous parameters, schedule recreation after 2 seconds - COMMENTED OUT FOR SMOOTH PLACEMENT
+        /*
         previousNodeParams?.let { prevParams ->
             println("⏰ Scheduling recreation of previous node in 2 seconds...")
             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
@@ -564,14 +584,16 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
         
         // Step 6: Store current parameters as previous for next time
         previousNodeParams = currentNodeParams
+        */
         
-        // Step 7: Send anchor data to server
+        // Send anchor data to server for 3D mapping (logging and tracking still intact)
         webSocketManager.sendNodeAnchorData(node)
     }
     
     /**
-     * Shows a dialog for Link nodes and schedules auto-replacement after 10 seconds
+     * Shows a dialog for Link nodes and schedules auto-replacement after 10 seconds - COMMENTED OUT FOR STATIC PLACEMENT
      */
+    /*
     fun showLinkNodeDialog(linkNode: Link) {
         runOnUiThread {
             // Show dialog with model info
@@ -595,10 +617,12 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
             println("📋 Dialog shown for Link node: ${linkNode.name} with URL: ${linkNode.uri}")
         }
     }
+    */
     
     /**
-     * Replaces a Link node with the campsite model at the same location
+     * Replaces a Link node with the campsite model at the same location - COMMENTED OUT FOR STATIC PLACEMENT
      */
+    /*
     private fun replaceWithCampsite(originalNode: Link) {
         println("🏕️ Replacing Link node with campsite model...")
         
@@ -658,6 +682,7 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
                 .show()
         }
     }
+    */
     
     /**
      * Recreates a node from stored parameters at the exact same location
