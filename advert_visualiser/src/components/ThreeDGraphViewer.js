@@ -177,12 +177,12 @@ const ThreeDGraphViewer = () => {
     wsRef.current.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log('🔗 Received WebSocket data:', data); // DEBUG: Log all incoming data
+        // console.log('🔗 Received WebSocket data:', data); // DEBUG: Log all incoming data
 
         // Handle different types of data
         switch (data.type) {
           case 'devicePose':
-            console.log(`📱 Device pose update: Position(${data.devicePositionX?.toFixed(3)}, ${data.devicePositionY?.toFixed(3)}, ${data.devicePositionZ?.toFixed(3)})`);
+            // console.log(`📱 Device pose update: Position(${data.devicePositionX?.toFixed(3)}, ${data.devicePositionY?.toFixed(3)}, ${data.devicePositionZ?.toFixed(3)})`);
             // Update device mesh position and path
             if (deviceMeshRef.current) {
               // Position: (X, Y, Z)

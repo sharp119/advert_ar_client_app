@@ -79,6 +79,15 @@ data class AnchorData(
     val rotation: com.google.ar.sceneform.math.Quaternion
 )
 
+/**
+ * Data class for node to model URL mapping
+ */
+data class NodeMapping(
+    val nodeId: String,
+    val modelUrl: String,
+    val modelName: String
+)
+
 class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inflate), ObjectMappingListener {
 
     private val coordinator by lazy { Coordinator(this, ::onArTap, ::onNodeSelected, ::onNodeFocused) }
@@ -197,6 +206,11 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
                     
                     // Send location data to server
                     sendLocationDataToServer()
+                }
+                
+                // Setup refresh button
+                binding.btnRefreshMappings.setOnClickListener {
+                    refreshModelMappings()
                 }
                 
                 // Show only: URL option (link), shapes (sphere, cube, cylinder), stats and color remain visible
@@ -1016,6 +1030,203 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
                 }
             }
             else -> Unit
+        }
+    }
+    
+    // ========== Model Mapping Refresh ==========
+    
+    /**
+     * Refresh model mappings from the frontend JSON API
+     */
+    private fun refreshModelMappings() {
+        Toast.makeText(this, "🔄 Refreshing model mappings...", Toast.LENGTH_SHORT).show()
+        
+        // Execute in background thread
+        Thread {
+            try {
+                val mappingData = fetchMappingJson()
+                if (mappingData.isNotEmpty()) {
+                    runOnUiThread {
+                        processMappings(mappingData)
+                    }
+                } else {
+                    runOnUiThread {
+                        Toast.makeText(this, "📄 No mappings found", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                println("❌ Error refreshing mappings: ${e.message}")
+                runOnUiThread {
+                    Toast.makeText(this, "❌ Failed to refresh mappings", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
+    }
+    
+    /**
+     * Fetch the mapping JSON from the frontend API
+     */
+    private fun fetchMappingJson(): List<NodeMapping> {
+        return try {
+            val url = java.net.URL("http://192.168.1.4:3000/api/mappings")
+            val connection = url.openConnection() as java.net.HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.connectTimeout = 5000
+            connection.readTimeout = 5000
+            
+            val responseCode = connection.responseCode
+            if (responseCode == java.net.HttpURLConnection.HTTP_OK) {
+                val response = connection.inputStream.bufferedReader().use { it.readText() }
+                parseMappingJson(response)
+            } else {
+                println("❌ HTTP error: $responseCode")
+                emptyList()
+            }
+        } catch (e: Exception) {
+            println("❌ Error fetching mapping JSON: ${e.message}")
+            emptyList()
+        }
+    }
+    
+    /**
+     * Parse the mapping JSON response
+     */
+    private fun parseMappingJson(json: String): List<NodeMapping> {
+        return try {
+            val jsonObject = org.json.JSONObject(json)
+            val mappingsArray = jsonObject.getJSONArray("mappings")
+            val mappings = mutableListOf<NodeMapping>()
+            
+            for (i in 0 until mappingsArray.length()) {
+                val mappingJson = mappingsArray.getJSONObject(i)
+                mappings.add(
+                    NodeMapping(
+                        nodeId = mappingJson.getString("nodeId"),
+                        modelUrl = mappingJson.getString("modelUrl"),
+                        modelName = mappingJson.optString("modelName", "Unknown Model")
+                    )
+                )
+            }
+            
+            mappings
+        } catch (e: Exception) {
+            println("❌ Error parsing mapping JSON: ${e.message}")
+            emptyList()
+        }
+    }
+    
+    /**
+     * Process the mappings and update nodes
+     */
+    private fun processMappings(mappings: List<NodeMapping>) {
+        var updatedCount = 0
+        
+        println("📊 Processing ${mappings.size} mappings:")
+        for (mapping in mappings) {
+            println("🔍 Looking for node: ${mapping.nodeId} to replace with: ${mapping.modelUrl}")
+            
+            val node = findNodeByName(mapping.nodeId)
+            if (node != null && node is Link) {
+                try {
+                    println("✅ Found Link node: ${node.name}")
+                    replaceNodeWithNewModel(node, mapping.modelUrl, mapping.modelName)
+                    updatedCount++
+                } catch (e: Exception) {
+                    println("❌ Error replacing node ${mapping.nodeId}: ${e.message}")
+                    e.printStackTrace()
+                }
+            } else {
+                println("⚠️ Node ${mapping.nodeId} not found or not a Link node. Found: ${node?.let { "${it::class.simpleName}: ${it.name}" } ?: "null"}")
+                
+                // Debug: List all current nodes in the scene
+                println("🔍 Current nodes in scene:")
+                arSceneView.scene.callOnHierarchy { sceneNode ->
+                    if (sceneNode is Nodes) {
+                        println("   - ${sceneNode::class.simpleName}: ${sceneNode.name}")
+                    }
+                }
+            }
+        }
+        
+        val message = if (updatedCount > 0) {
+            "✅ Updated $updatedCount models from ${mappings.size} mappings"
+        } else {
+            "⚠️ No nodes were updated from ${mappings.size} mappings"
+        }
+        
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    }
+    
+    /**
+     * Find a node by its name in the AR scene
+     */
+    private fun findNodeByName(nodeName: String): Nodes? {
+        arSceneView.scene.findInHierarchy { node ->
+            (node as? Nodes)?.name == nodeName
+        }?.let { return it as Nodes }
+        return null
+    }
+    
+    /**
+     * Replace an existing node with a new model URL - using the exact same approach as replaceWithCampsite
+     */
+    private fun replaceNodeWithNewModel(originalNode: Nodes, newModelUrl: String, modelName: String) {
+        println("🔄 Replacing node ${originalNode.name} with model: $modelName ($newModelUrl)")
+        
+        // Get the original node's anchor and position
+        val originalAnchor = originalNode.anchor()
+        if (originalAnchor == null) {
+            println("❌ Cannot replace node - no anchor found")
+            return
+        }
+        
+        // Store the original position data
+        val originalPose = originalAnchor.pose
+        val anchorData = AnchorData(
+            position = com.google.ar.sceneform.math.Vector3(
+                originalPose.translation[0], 
+                originalPose.translation[1], 
+                originalPose.translation[2]
+            ),
+            rotation = com.google.ar.sceneform.math.Quaternion(
+                originalPose.rotationQuaternion[0], 
+                originalPose.rotationQuaternion[1], 
+                originalPose.rotationQuaternion[2], 
+                originalPose.rotationQuaternion[3]
+            )
+        )
+        
+        // Delete the original node
+        originalNode.setParent(null)
+        println("🗑️ Deleted original Link node: ${originalNode.name}")
+        
+        // Create new anchor at the same position
+        val session = arSceneView.session ?: return
+        val newPose = com.google.ar.core.Pose(
+            floatArrayOf(anchorData.position.x, anchorData.position.y, anchorData.position.z),
+            floatArrayOf(anchorData.rotation.x, anchorData.rotation.y, anchorData.rotation.z, anchorData.rotation.w)
+        )
+        val newAnchor = session.createAnchor(newPose)
+        
+        // Create new Link node with the new model URL
+        val newModelUri = newModelUrl.toUri()
+        val newNode = Link(this, newModelUri, coordinator, settings)
+        
+        // Attach to scene at exact same location
+        newNode.attach(newAnchor, arSceneView.scene, false)
+        
+        println("✅ Successfully replaced with new model at same location")
+        
+        // Send data to server for new node
+        webSocketManager.sendNodeAnchorData(newNode)
+        
+        // Show confirmation dialog
+        runOnUiThread {
+            AlertDialog.Builder(ContextThemeWrapper(this, R.style.AlertDialog))
+                .setTitle("🔄 Model Replaced")
+                .setMessage("The original model has been replaced with $modelName at the same location.")
+                .setPositiveButton("OK") { dialog, _ -> dialog.dismiss() }
+                .show()
         }
     }
     

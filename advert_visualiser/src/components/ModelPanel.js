@@ -47,7 +47,7 @@ const ModelPanel = () => {
   }, []);
 
   const getModelUrl = (filename) => {
-    return `/models/${filename}`;
+    return `http://192.168.1.4:3000/models/${filename}`;
   };
 
   const handleModelClick = (model) => {
@@ -60,6 +60,18 @@ const ModelPanel = () => {
     }).catch(err => {
       console.error('Failed to copy URL:', err);
     });
+  };
+
+  const handleDragStart = (e, model) => {
+    const dragData = {
+      type: 'model',
+      model: model,
+      url: getModelUrl(model.filename)
+    };
+    e.dataTransfer.setData('application/json', JSON.stringify(dragData));
+    e.dataTransfer.effectAllowed = 'copy';
+    
+    console.log('🎯 Started dragging model:', model.name);
   };
 
   if (loading) {
@@ -102,6 +114,7 @@ const ModelPanel = () => {
         models.map((model) => (
           <div
             key={model.id}
+            draggable={true}
             style={{
               backgroundColor: '#3a3a3a',
               border: '1px solid #555',
@@ -109,10 +122,12 @@ const ModelPanel = () => {
               padding: '16px',
               marginBottom: '12px',
               boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
+              cursor: 'grab',
+              transition: 'all 0.2s ease',
+              userSelect: 'none'
             }}
             onClick={() => handleModelClick(model)}
+            onDragStart={(e) => handleDragStart(e, model)}
             onMouseEnter={(e) => {
               e.currentTarget.style.backgroundColor = '#4a4a4a';
               e.currentTarget.style.transform = 'translateY(-2px)';

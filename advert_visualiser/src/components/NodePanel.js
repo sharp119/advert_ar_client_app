@@ -6,7 +6,78 @@ const WEBSOCKET_URL = 'ws://localhost:8080';
 
 const NodePanel = () => {
   const [anchorNodes, setAnchorNodes] = useState(new Map());
+  const [dragOverNode, setDragOverNode] = useState(null);
   const wsRef = useRef(null);
+
+  // Send mapping to API endpoint
+  const addMapping = async (nodeId, modelUrl, modelName) => {
+    try {
+      console.log('🎯 Adding mapping:', { nodeId, modelUrl, modelName });
+      
+      const response = await fetch('/api/mappings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nodeId: nodeId,
+          modelUrl: modelUrl,
+          modelName: modelName
+        })
+      });
+
+      if (response.ok) {
+        console.log('✅ Mapping added successfully');
+      } else {
+        console.error('❌ Failed to add mapping:', response.statusText);
+      }
+    } catch (error) {
+      console.error('❌ Error adding mapping:', error);
+    }
+  };
+
+  const handleDragOver = (e, node) => {
+    if (node.nodeType === 'Link') {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  };
+
+  const handleDragEnter = (e, node) => {
+    if (node.nodeType === 'Link') {
+      e.preventDefault();
+      setDragOverNode(node.nodeId);
+    }
+  };
+
+  const handleDragLeave = (e, node) => {
+    if (node.nodeType === 'Link') {
+      setDragOverNode(null);
+    }
+  };
+
+  const handleDrop = (e, node) => {
+    e.preventDefault();
+    setDragOverNode(null);
+
+    if (node.nodeType !== 'Link') {
+      console.log('❌ Can only drop models on Link-type nodes');
+      return;
+    }
+
+    try {
+      const dragData = JSON.parse(e.dataTransfer.getData('application/json'));
+      
+      if (dragData.type === 'model') {
+        console.log(`🎯 Dropped ${dragData.model.name} on Link node ${node.nodeId}`);
+        
+        // Add mapping to API
+        addMapping(node.nodeId, dragData.url, dragData.model.name);
+      }
+    } catch (error) {
+      console.error('❌ Error handling drop:', error);
+    }
+  };
 
   useEffect(() => {
     // WebSocket connection to listen for anchor node data
@@ -103,27 +174,41 @@ const NodePanel = () => {
           </p>
         </div>
       ) : (
-        nodeArray.map((node) => (
-          <div
-            key={node.nodeId}
-            style={{
-              backgroundColor: '#3a3a3a',
-              border: '1px solid #555',
-              borderRadius: '8px',
-              padding: '16px',
-              marginBottom: '12px',
-              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.target.style.backgroundColor = '#4a4a4a';
-              e.target.style.transform = 'translateY(-2px)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.backgroundColor = '#3a3a3a';
-              e.target.style.transform = 'translateY(0)';
-            }}
-          >
+        nodeArray.map((node) => {
+          const isLinkNode = node.nodeType === 'Link';
+          const isDraggedOver = dragOverNode === node.nodeId;
+          
+          return (
+            <div
+              key={node.nodeId}
+              style={{
+                backgroundColor: isDraggedOver ? '#4CAF50' : '#3a3a3a',
+                border: isLinkNode ? (isDraggedOver ? '2px solid #81C784' : '2px solid #4CAF50') : '1px solid #555',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '12px',
+                boxShadow: isDraggedOver ? '0 4px 12px rgba(76,175,80,0.4)' : '0 2px 4px rgba(0,0,0,0.3)',
+                transition: 'all 0.2s ease',
+                cursor: isLinkNode ? 'pointer' : 'default',
+                position: 'relative'
+              }}
+              onDragOver={(e) => handleDragOver(e, node)}
+              onDragEnter={(e) => handleDragEnter(e, node)}
+              onDragLeave={(e) => handleDragLeave(e, node)}
+              onDrop={(e) => handleDrop(e, node)}
+              onMouseEnter={(e) => {
+                if (!isDraggedOver) {
+                  e.currentTarget.style.backgroundColor = '#4a4a4a';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isDraggedOver) {
+                  e.currentTarget.style.backgroundColor = '#3a3a3a';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }
+              }}
+            >
             {/* Header with icon and type */}
             <div style={{
               display: 'flex',
@@ -186,8 +271,26 @@ const NodePanel = () => {
             }}>
               Created: {formatTimestamp(node.timestamp)}
             </div>
+
+            {/* Drop zone indicator for Link nodes */}
+            {isLinkNode && (
+              <div style={{
+                position: 'absolute',
+                top: '8px',
+                right: '8px',
+                backgroundColor: isDraggedOver ? '#81C784' : '#4CAF50',
+                color: 'white',
+                padding: '4px 8px',
+                borderRadius: '4px',
+                fontSize: '10px',
+                fontWeight: 'bold'
+              }}>
+                {isDraggedOver ? 'DROP HERE' : 'DRAG & DROP'}
+              </div>
+            )}
           </div>
-        ))
+        );
+        })
       )}
     </div>
   );
