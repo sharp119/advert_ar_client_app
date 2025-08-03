@@ -89,6 +89,9 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
     lateinit var webSocketManager: WebSocketManager
     private val WEBSOCKET_SERVER_URL = "ws://192.168.1.4:8080" // Default for emulator
     
+    // Mode tracking (anchor or viewer)
+    private var appMode: String = "anchor" // default to anchor mode
+    
     // Simple tracking for delete-previous logic
     var lastCreatedNode: Nodes? = null
     
@@ -140,6 +143,10 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Get the mode from intent
+        appMode = intent.getStringExtra("mode") ?: "anchor"
+        
         initSceneBottomSheet()
         initNodeBottomSheet()
         initAr()
@@ -147,11 +154,48 @@ class SceneActivity : ArActivity<ActivitySceneBinding>(ActivitySceneBinding::inf
         webSocketManager = WebSocketManager(this, WEBSOCKET_SERVER_URL)
         // Note: Not using object mapping listener in simplified delete-previous mode
         webSocketManager.initWebSocket()
+        
+        // Configure UI based on mode
+        configureUIForMode()
     }
 
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         initWithIntent(intent)
+    }
+    
+    private fun configureUIForMode() {
+        when (appMode) {
+            "anchor" -> {
+                // Anchor mode: Enable all object creation functionality
+                // This is the default behavior - no changes needed
+                supportActionBar?.title = "Expolens - Anchor Mode"
+                Toast.makeText(this, "🔗 Anchor Mode: Create and place AR objects", Toast.LENGTH_LONG).show()
+            }
+            "viewer" -> {
+                // Viewer mode: Disable object creation, focus on viewing
+                supportActionBar?.title = "Expolens - Viewer Mode"
+                Toast.makeText(this, "👁️ Viewer Mode: View and track AR objects", Toast.LENGTH_LONG).show()
+                
+                // Disable the add button in viewer mode
+                bottomSheetScene.header.add.isEnabled = false
+                bottomSheetScene.header.add.alpha = 0.5f
+                
+                // Hide object selection options in viewer mode
+                with(bottomSheetScene.body) {
+                    sphere.visibility = View.GONE
+                    cylinder.visibility = View.GONE
+                    cube.visibility = View.GONE
+                    view.visibility = View.GONE
+                    drawing.visibility = View.GONE
+                    measure.visibility = View.GONE
+                    andy.visibility = View.GONE
+                    video.visibility = View.GONE
+                    link.visibility = View.GONE
+                    cloudAnchor.visibility = View.GONE
+                }
+            }
+        }
     }
 
     override fun onBackPressed() {
