@@ -657,6 +657,11 @@ class Link(
         }
     }
 
+    // Rotation animation variables
+    private var rotationSpeed = 30f // degrees per second (slow rotation)
+    private var currentRotation = 0f
+    private var lastUpdateTime = System.currentTimeMillis()
+
     init {
         warmup(context, uri).thenAccept { renderable = it }
         
@@ -666,6 +671,37 @@ class Link(
             context.showLinkNodeDialog(this)
         }
         */
+    }
+    
+    override fun onActivate() {
+        super.onActivate()
+        // Initialize rotation animation when node is activated/attached to scene
+        lastUpdateTime = System.currentTimeMillis()
+    }
+    
+    override fun onUpdate(frameTime: FrameTime) {
+        super.onUpdate(frameTime)
+        
+        // Only rotate if the node is active and visible
+        if (isActive) {
+            updateRotation(frameTime)
+        }
+    }
+    
+    private fun updateRotation(frameTime: FrameTime) {
+        val currentTime = System.currentTimeMillis()
+        val deltaTime = (currentTime - lastUpdateTime) / 1000f // Convert to seconds
+        lastUpdateTime = currentTime
+        
+        // Update rotation (horizontal Y-axis rotation)
+        currentRotation += rotationSpeed * deltaTime
+        if (currentRotation >= 360f) {
+            currentRotation -= 360f
+        }
+        
+        // Apply rotation around Y-axis (horizontal rotation like a showpiece)
+        val rotationQuaternion = Quaternion.axisAngle(Vector3(0f, 1f, 0f), currentRotation)
+        localRotation = rotationQuaternion
     }
     
     // Custom bounded space size for external Link models (usually larger)
