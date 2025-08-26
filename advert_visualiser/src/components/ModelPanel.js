@@ -47,7 +47,7 @@ const ModelPanel = () => {
   }, []);
 
   const getModelUrl = (filename) => {
-    return `http://192.168.1.4:3000/models/${filename}`;
+    return `http:// 192.168.1.4:3000/models/${filename}`;
   };
 
   const handleModelClick = (model) => {
